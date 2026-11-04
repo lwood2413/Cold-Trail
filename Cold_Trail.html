@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cold Trail</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:wght@400;700&family=Libre+Franklin:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.3/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.9/topojson.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datamaps@0.5.9/dist/datamaps.world.min.js"></script>
+<script>window.WT=window.Datamap&&Datamap.prototype.worldTopo;</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{--bg:#0b111b;--panel:#121b29;--line:#243349;--ink:#dfe7f2;--dim:#8a9bb2;--amber:#f2b441;--red:#e5484d;--grn:#4cc38a;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:inherit}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:radial-gradient(ellipse at top,#16233a,var(--bg) 60%);color:var(--ink);font:15px/1.55 'Libre Franklin',system-ui,sans-serif;min-height:100vh}
+main{max-width:620px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px}
+h1{font:400 44px/1 'Bebas Neue',Impact,sans-serif;margin:0;letter-spacing:5px;color:var(--amber)}
+.sub{color:var(--dim);font:700 12px 'Courier Prime',monospace;letter-spacing:3px;text-transform:uppercase}
+.stamp{font:700 12px 'Courier Prime',monospace;letter-spacing:2px;color:var(--dim);text-align:right}
+.stamp b{color:var(--ink);font:400 30px/1 'Bebas Neue',sans-serif;letter-spacing:3px;display:block}
+.globe{position:relative;background:#070c14;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+canvas{display:block;width:100%;height:auto}
+.badge{position:absolute;left:12px;top:10px;font:700 12px 'Courier Prime',monospace;color:var(--amber);letter-spacing:2px}
+.row{display:flex;gap:8px;margin:14px 0}
+input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:12px;font:700 15px 'Courier Prime',monospace;letter-spacing:.5px}input::placeholder{color:var(--dim);font-weight:400}
+input:focus{outline:2px solid var(--amber);border-color:transparent}
+button{background:var(--amber);color:#1a1204;border:0;border-radius:10px;padding:0 18px;font:400 22px/1 'Bebas Neue',Impact,sans-serif;letter-spacing:2px;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+button.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber);padding:9px 16px}
+#msg{min-height:20px;color:var(--red);font-size:13px;margin:-6px 0 6px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;padding:12px 14px;margin-bottom:10px;animation:in .45s ease}
+.card h3{margin:0 0 4px;font:700 16px 'Courier Prime',monospace;letter-spacing:.5px;color:var(--amber)}
+.card p{margin:3px 0;color:var(--ink)}.card p.intel{color:var(--grn)}
+.win{border-left-color:var(--grn)}.win h3{color:var(--grn)}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.foot{color:var(--dim);font-size:12px;text-align:center;margin-top:18px}.zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}.zoom button{width:36px;height:36px;padding:0;font-size:24px;border-radius:8px;background:rgba(18,27,41,.85);color:var(--amber);border:1px solid var(--line)}
+</style></head><body><main>
+<header><div><h1>COLD TRAIL</h1><div class="sub">A Daily Manhunt</div></div>
+<div class="stamp">CASE No.<b id="cn"></b></div></header>
+<div class="globe"><canvas id="cv"></canvas><div class="badge" id="badge">FLIGHTS: 0</div><div class="zoom"><button id="zi" aria-label="Zoom in">+</button><button id="zo" aria-label="Zoom out">−</button></div><div class="badge" style="top:auto;bottom:10px;color:var(--dim)">drag to spin · scroll or pinch to zoom</div></div>
+<div class="row"><input id="in" list="cl" placeholder="Fly to any of 195 countries…" autocomplete="off"><datalist id="cl"></datalist><button id="go">Fly ✈</button></div>
+<div id="msg"></div><div id="log"></div>
+<p class="foot">One suspect among 195 countries. A new case every day. Fewer flights is better.</p>
+</main>
+<script>
+const LN={en:"English",es:"Spanish",fr:"French",ar:"Arabic",pt:"Portuguese",ru:"Russian",de:"German",it:"Italian",zh:"Mandarin"};
+const RAW=`Algeria|28|3|F|ar||Home to much of the Sahara|Largest country on the African continent
+Angola|-12|18|F|pt||Africa’s second-largest oil producer, once Portuguese-ruled|Kizomba dance music was born here
+Benin|9|2|F|fr||Birthplace of Vodun and the old Dahomey kingdom|Home to the stilt village of Ganvié
+Botswana|-22|24|F|en|L|Okavango Delta and diamonds|The Kalahari covers most of its land
+Burkina Faso|12|-2|F|fr|L|Hosts Africa’s biggest film festival, FESPACO|Its name means land of upright people
+Burundi|-3|30|F|fr|L|Shoreline on Lake Tanganyika, famed for royal drummers|Landlocked neighbor of Rwanda and Tanzania
+Cabo Verde|16|-24|F|pt|I|Volcanic islands and the birthplace of morna music|Barefoot diva Cesária Évora sang of its islands
+Cameroon|6|12|F|fr||Nicknamed Africa in miniature|Its highest peak is an active volcano near the coast
+Central African Republic|7|21|F|fr|L|Rainforest reserve of Dzanga-Sangha is found here|Diamond and gold mining on a landlocked plateau
+Chad|15|19|F|fr|L|Shares a huge lake with its neighbors|Its great lake has shrunk dramatically since the 1960s
+Comoros|-12|44|F|ar|I|Volcanic islands known for ylang-ylang perfume|Mount Karthala is among the world’s largest active volcanoes
+Republic of the Congo|-1|15|F|fr||Its capital faces a bigger capital across a mighty river|Neighbors a larger country named for the same river
+DR Congo|-3|23|F|fr||Home to the Congo River and rainforest|Africa’s second-largest country by area
+Ivory Coast|7|-5|F|fr||World leader in cocoa|A basilica here rivals St. Peter’s in size
+Djibouti|12|43|F|fr||Salt lake Assal is one of Africa’s lowest points|Hosts military bases of several world powers
+Egypt|26|30|F|ar||Pyramids of Giza and the Nile|A famous canal links the Mediterranean to the Red Sea
+Equatorial Guinea|2|10|F|es||Only African country with Spanish as an official language|Has a mainland part plus the island of Bioko
+Eritrea|15|39|F|Tigrinya||Its capital is famed for Art Deco architecture|The Dahlak Archipelago lies off its Red Sea coast
+Eswatini|-26.5|31.5|F|en|L|Africa’s last absolute monarchy|Its annual Reed Dance is a major cultural event
+Ethiopia|9|40|F|Amharic|L|Origin of coffee, never colonized|Uses its own calendar, about seven years behind
+Gabon|-1|12|F|fr||Rainforest nation sheltering many forest elephants|Loango National Park has surfing hippos
+Gambia|13.5|-15|F|en||Thin country that hugs a river, almost enclosed by Senegal|Alex Haley traced his Roots to a village here
+Ghana|8|-1|F|en||First sub-Saharan country to gain independence|Lake Volta is among the largest man-made lakes
+Guinea|10|-11|F|fr||The Niger River begins here|Its Fouta Djallon highlands feed many West African rivers
+Guinea-Bissau|12|-15|F|pt||Offshore Bijagos archipelago is a biosphere reserve|Cashew nuts dominate its economy
+Kenya|0|38|F|Swahili||Safari country, famed for marathon runners|The Great Rift Valley splits its highlands
+Lesotho|-29.5|28|F|en|L|A kingdom entirely surrounded by one country|Kingdom in the sky; even its lowest point is above 1,000 m
+Liberia|6.5|-9.5|F|en||Founded by freed Americans, with a flag echoing the US|Its capital is named after a US president
+Libya|27|17|F|ar||Roman ruins at Leptis Magna and Sahara oases|Home of a vast man-made river project under the desert
+Madagascar|-19|47|F|Malagasy|I|Lemurs live in the wild nowhere else|Baobab trees line its famous avenue
+Malawi|-13|34|F|en|L|Lake with more fish species than any other lake|Its big lake is nicknamed the Calendar Lake
+Mali|17|-4|F|fr|L|Timbuktu is here|The Great Mosque of Djenné is the largest mud-brick building
+Mauritania|20|-10|F|ar||Home to one of the world’s longest iron-ore trains|The Eye of the Sahara is a giant rock formation here
+Mauritius|-20|57.5|F|en|I|Home of the extinct dodo|Seven-colored earths and an extinct flightless bird
+Morocco|32|-6|F|ar||Marrakech souks and the Atlas Mountains|The blue city of Chefchaouen and Fez’s medieval medina
+Mozambique|-18|35|F|pt||Long Indian Ocean coastline and Portuguese language|Cashews and prawns drive its coastal trade
+Namibia|-22|17|F|en||Home to the oldest desert, the Namib|The Skeleton Coast is littered with shipwrecks
+Niger|17|8|F|fr|L|Home to the Aïr Mountains and the Ténéré desert|One of the youngest populations on Earth, on the Sahel
+Nigeria|9|8|F|en||Africa’s most populous nation, home of Nollywood|Largest economy in Africa, with Lagos as its biggest city
+Rwanda|-2|30|F|Kinyarwanda|L|Land of a thousand hills and mountain gorillas|Plastic bags are banned and streets are spotless
+Sao Tome and Principe|0.2|6.6|F|pt|I|Tiny island nation straddling the equator|Cocoa plantations once made it a top producer
+Senegal|14.5|-14.5|F|fr|| Westernmost point of mainland Africa|Pink Lake Retba gets its color from algae
+Seychelles|-4.7|55.5|F|fr|I|Granite beaches in the Indian Ocean|Coco de mer grows the world’s heaviest seed
+Sierra Leone|8.5|-11.8|F|en||Its name comes from the Portuguese for lion mountains|Tacugama chimpanzee sanctuary is near its capital
+Somalia|5|46|F|Somali||Longest coastline on mainland Africa|Sits on the Horn of Africa
+South Africa|-29|24|F|en||Home of Nelson Mandela and Table Mountain|Has three capital cities
+South Sudan|7|30|F|en|L|The world’s newest UN member|Separated from its northern neighbor in 2011
+Sudan|15|30|F|ar||Has more pyramids than Egypt|The Blue and White Nile meet at its capital
+Tanzania|-6|35|F|Swahili||Mount Kilimanjaro and the Serengeti|Zanzibar, the spice island, belongs to it
+Togo|8.6|1|F|fr||Narrow strip of West African coast and a phosphate hub|Its capital’s Akodessewa market sells voodoo fetishes
+Tunisia|34|9|F|ar||Site of ancient Carthage|Star Wars desert scenes were filmed here
+Uganda|1|32|F|en|L|Source of the Nile|Bwindi forest shelters around half the world’s mountain gorillas
+Zambia|-15|28|F|en|L|Shares Victoria Falls|A Copperbelt mining region lies in its north
+Zimbabwe|-19|30|F|en|L|Ancient stone ruins gave this nation its name|Hwange National Park has huge elephant herds
+Afghanistan|33|65|A|Pashto|L|Silk Road crossroads ringed by the Hindu Kush|Giant Buddhas were carved into the cliffs of Bamiyan
+Armenia|40|45|A|Armenian|L|One of the world’s oldest Christian nations|Mount Ararat looms over its capital
+Azerbaijan|40.5|47.5|A|Azerbaijani||Land of fire with a Caspian coast|Flame Towers rise over its Caspian capital
+Bahrain|26|50.5|A|ar|I|Island kingdom with pearl-diving history and a Formula 1 race|Ancient fort and pearl-diving heritage are UNESCO sites
+Bangladesh|24|90|A|Bengali||Home of the Sundarbans tigers|Sits on the world’s largest river delta
+Bhutan|27.5|90.5|A|Dzongkha|L|Measures Gross National Happiness|Tiger’s Nest monastery clings to a cliff
+Brunei|4.5|114.7|A|Malay||Sultanate on Borneo with enormous oil wealth|Has the world’s largest residential palace
+Cambodia|12.5|105|A|Khmer||Angkor Wat is its icon|Its great lake reverses flow every year
+China|35|103|A|zh||The Great Wall and giant pandas|A terracotta army guards its first emperor’s tomb
+Cyprus|35|33|A|Greek|I|Mythical birthplace of Aphrodite, a divided Mediterranean island|Mediterranean island with a divided capital
+Georgia|42|43.5|A|Georgian||Cradle of wine, in the Caucasus|Supra feasts and khachapuri cheese bread
+India|21|78|A|Hindi||Taj Mahal and Bollywood|Cricket obsession and the world’s largest democracy
+Indonesia|-2|118|A|Indonesian|I|World’s largest archipelago; Bali is here|Komodo dragons roam its islands
+Iran|32|53|A|Persian||The heart of ancient Persia|Persepolis was an ancient ceremonial capital
+Iraq|33|44|A|ar||Cradle of Mesopotamia|Ancient Babylon lies south of its capital
+Israel|31|35|A|Hebrew||Shares the Dead Sea, the lowest point on land|Jaffa oranges and the Western Wall
+Japan|36|138|A|Japanese|I|Sushi, anime and Mount Fuji|Bullet trains and cherry blossom viewing
+Jordan|31|36.5|A|ar||Petra, the rose-red city|Wadi Rum desert often doubles as Mars on screen
+Kazakhstan|48|67|A|Kazakh|L|Largest landlocked country on Earth|Baikonur Cosmodrome launched Gagarin into space
+Kuwait|29.3|47.7|A|ar||Famous for twin-bulb towers and oil fields|Once a pearl-diving and trading port in the Gulf
+Kyrgyzstan|41|75|A|Kyrgyz|L|Mountainous land around the alpine lake Issyk-Kul|Nomads still live in yurts on summer pastures
+Laos|18|103|A|Lao|L|Land of a million elephants, on the Mekong|The Plain of Jars holds thousands of ancient stone vessels
+Lebanon|33.9|35.9|A|ar||Famous for its cedar tree|Cedar trees and ancient Byblos
+Malaysia|4|102|A|Malay||Petronas Twin Towers|Borneo rainforest and twin skyscrapers
+Maldives|3.2|73.2|A|Dhivehi|I|Lowest-lying country on Earth|Overwater bungalows on coral atolls
+Mongolia|46|105|A|Mongolian|L|Genghis Khan’s homeland|Naadam festival features wrestling, archery and horse racing
+Myanmar|21|96|A|Burmese||Thousands of temples rise from the plain at Bagan|Shwedagon Pagoda glitters with gold
+Nepal|28|84|A|Nepali|L|Mount Everest straddles its border|The Buddha was born at Lumbini here
+North Korea|40|127|A|Korean||Isolated state with the DMZ on its southern border|Hosts huge Arirang mass games
+Oman|21|57|A|ar||Sultanate known for frankincense|Land of Sinbad and frankincense trees
+Pakistan|30|70|A|Urdu||Home to K2, the second-highest peak|Indus Valley civilization at Mohenjo-daro
+Palestine|31.9|35.2|A|ar||Home to Bethlehem and Jericho, among the oldest cities|Olive harvests and the Church of the Nativity
+Philippines|12|122|A|Filipino|I|Over 7,000 islands in Southeast Asia|Chocolate Hills and Banaue rice terraces
+Qatar|25.3|51.2|A|ar||Hosted the 2022 World Cup|Skyline rises from desert and sea
+Russia|61|100|A|ru||The largest country on Earth|Trans-Siberian railway crosses eleven time zones
+Saudi Arabia|24|45|A|ar||Home to Mecca and vast deserts|Hosts the annual hajj pilgrimage
+Singapore|1.35|103.8|A|en|I|A city-state with a Merlion mascot|Gardens by the Bay and strict chewing gum rules
+South Korea|36.5|128|A|Korean||K-pop and kimchi|Gangnam style became a global dance craze
+Sri Lanka|7.8|80.7|A|Sinhala|I|Teardrop island famous for tea|Sigiriya rock fortress and Ceylon tea
+Syria|35|38|A|ar||Has one of the oldest continuously inhabited capitals|Palmyra’s ruins were a caravan oasis
+Tajikistan|39|71|A|Tajik|L|Home to the Pamirs, nicknamed the roof of the world|One of the world’s longest non-polar glaciers is here
+Thailand|15|101|A|Thai||Land of Smiles, famous for pad thai|Street food and elephant sanctuaries
+Timor-Leste|-8.8|125.7|A|pt||Asia’s newest independent nation, sharing an island|Gained independence from a larger neighbor after a 1999 vote
+Turkey|39|35|A|Turkish||Straddles two continents; Istanbul is its largest city|Hagia Sophia and Cappadocian balloons
+Turkmenistan|39|59|A|Turkmen|L|Has a burning gas crater called the Gates of Hell|Its capital is full of white marble buildings
+United Arab Emirates|24|54|A|ar||Home to Dubai and the Burj Khalifa|Has the world’s tallest building
+Uzbekistan|41|64|A|Uzbek|L|Silk Road cities like Samarkand|Blue-tiled Registan square in Samarkand
+Vietnam|16|107|A|Vietnamese||Known for pho and Ha Long Bay|Cu Chi tunnels and motorbike-filled streets
+Yemen|15.5|48|A|ar||Socotra island has trees found nowhere else|Sanaa’s old city has ancient tower houses
+Albania|41|20|E|Albanian||Thousands of concrete bunkers dot its landscape|Skanderbeg is its medieval national hero
+Andorra|42.5|1.5|E|Catalan|L|Pyrenean principality famous for duty-free skiing|Co-ruled by a French president and a Spanish bishop
+Austria|47.5|14.5|E|de|L|Mozart and the Alps|The Sound of Music was set in Salzburg
+Belarus|53.7|28|E|Belarusian|L|Shares Europe’s last primeval forest, Białowieża|Home to Mir Castle
+Belgium|50.6|4.7|E|Dutch||Waffles, chocolate and EU headquarters|Its capital hosts the main EU institutions
+Bosnia and Herzegovina|44|18|E|Bosnian||Famous Stari Most bridge in Mostar|Its capital endured a siege of nearly four years
+Bulgaria|42.7|25.5|E|Bulgarian||Rose oil and yogurt|Nodding means no and shaking means yes here
+Croatia|45.1|15.2|E|Croatian||Dalmatian coast and the dog breed|Dubrovnik doubled as King’s Landing
+Czechia|49.8|15.5|E|Czech|L|Prague and plenty of beer|Prague Castle is the largest ancient castle complex
+Denmark|56|10|E|Danish||Home of LEGO|The Little Mermaid statue sits in its capital harbor
+Estonia|58.7|25.5|E|Estonian||Birthplace of Skype|Medieval Old Town and a digital government
+Finland|64|26|E|Finnish||Saunas and a thousand lakes|Santa’s hometown Rovaniemi lies on the Arctic Circle
+France|46|2|E|fr||Eiffel Tower, croissants and the Louvre|The Louvre houses the Mona Lisa
+Germany|51|10|E|de||Oktoberfest and the autobahn|The Berlin Wall fell in 1989
+Greece|39|22|E|Greek||Birthplace of the Olympics and democracy|The Acropolis crowns its capital
+Hungary|47|19.5|E|Hungarian|L|Goulash and the Rubik’s Cube|Thermal baths and the Danube bend in its capital
+Iceland|65|-18|E|Icelandic|I|Land of fire, ice and geysers|Blue Lagoon and the northern lights
+Ireland|53|-8|E|en|I|The Emerald Isle, known for shamrocks|Guinness and St. Patrick’s Day
+Italy|42.5|12.5|E|it||Boot-shaped, with pizza and the Colosseum|Leaning tower of Pisa and the canals of Venice
+Latvia|56.9|24.6|E|Latvian||Baltic nation known for its Song and Dance Festival|Its capital has Europe’s greatest collection of Art Nouveau
+Liechtenstein|47.2|9.6|E|de|L|A tiny principality between two larger neighbors|Fewer than 40,000 people live in this Alpine princedom
+Lithuania|55.2|23.9|E|Lithuanian||The Hill of Crosses is a pilgrimage site|Baltic amber is its treasured gem
+Luxembourg|49.8|6.1|E|Luxembourgish|L|One of the world’s richest countries per person|Has three official languages
+Malta|35.9|14.4|E|Maltese|I|Home of the Knights of St. John|Megalithic temples older than Stonehenge
+Moldova|47|28.5|E|Romanian|L|Famous for huge underground wine cellars|Cricova cellars hold millions of bottles
+Monaco|43.7|7.4|E|fr||Casinos and a Formula 1 street race|Smaller than New York’s Central Park
+Montenegro|42.7|19.3|E|Montenegrin||Bay of Kotor is a fjord-like inlet on its coast|Its name means Black Mountain
+Netherlands|52.3|5.5|E|Dutch||Tulips, windmills and bicycles|Much of its land lies below sea level
+North Macedonia|41.6|21.7|E|Macedonian|L|Lake Ohrid is among Europe’s oldest lakes|Mother Teresa was born in its capital
+Norway|61|9|E|Norwegian||Land of fjords and the midnight sun|The Nobel Peace Prize is awarded in its capital
+Poland|52|19|E|Polish||Homeland of Chopin and Copernicus|Wieliczka Salt Mine has underground chapels
+Portugal|39.5|-8|E|pt||Birthplace of Cristiano Ronaldo|Pastel de nata custard tarts and fado music
+Romania|45.9|25|E|Romanian||Transylvania, home of the Dracula legend|Bran Castle is linked to Dracula
+San Marino|43.9|12.5|E|it|L|One of the world’s oldest republics|Surrounded entirely by Italy
+Serbia|44|21|E|Serbian|L|Home country of tennis champion Novak Djokovic|Its capital sits where the Sava meets the Danube
+Slovakia|48.7|19.7|E|Slovak|L|Has more castles per person than almost anywhere|Its capital lies on the Danube near two borders
+Slovenia|46.1|14.8|E|Slovene||Lake Bled and Alpine charm|Predjama Castle is built into a cave mouth
+Spain|40|-4|E|es||Flamenco, paella and running of the bulls|La Sagrada Familia is still being built
+Sweden|62|15|E|Swedish||Home of IKEA and ABBA|The Nobel Prizes began here and fika is a daily ritual
+Switzerland|46.8|8.2|E|de|L|Chocolate, watches and famous neutrality|The Matterhorn and pocket knives with red handles
+Ukraine|49|32|E|Ukrainian||Known as the breadbasket of Europe|Sunflower fields and the Chernobyl zone
+United Kingdom|54|-2|E|en|I|Home of Big Ben and the royal family|Stonehenge and afternoon tea
+Vatican City|41.9|12.45|E|it|L|The smallest country in the world|Home to the Sistine Chapel
+Antigua and Barbuda|17.1|-61.8|N|en|I|Said to have a beach for every day of the year|Nelson’s Dockyard is a UNESCO naval harbor
+Bahamas|25|-77.4|N|en|I|Swimming pigs and turquoise water|Over 700 islands and a famed swimming pig beach
+Barbados|13.2|-59.5|N|en|I|Birthplace of Rihanna|Rum and cricket-loving Caribbean island
+Belize|17.2|-88.5|N|en||Second-largest barrier reef in the world|The Great Blue Hole is a giant marine sinkhole
+Canada|56|-106|N|en||Maple syrup capital, with a leaf on its flag|Niagara Falls and the CN Tower
+Costa Rica|10|-84|N|es||Pura vida, with no standing army|Cloud forests and sloths
+Cuba|21.5|-79|N|es|I|Famous for cigars and classic 1950s cars|Havana’s Malecón and old Chevrolets
+Dominica|15.4|-61.4|N|en|I|Nature Island of the Caribbean with a boiling lake|Home to Morne Trois Pitons park
+Dominican Republic|19|-70.2|N|es||Shares an island with Haiti|Merengue music and Punta Cana beaches
+El Salvador|13.8|-88.9|N|es||Land of volcanoes, first to make bitcoin legal tender|Surf beaches along the Pacific
+Grenada|12.1|-61.7|N|en|I|The Spice Isle|Underwater sculpture park off its coast
+Guatemala|15.5|-90.3|N|es||Ancient Maya city of Tikal|Lake Atitlán is ringed by volcanoes
+Haiti|19|-72.4|N|fr||First Black republic, born of a slave revolt|Citadelle Laferrière fortress crowns a mountain
+Honduras|15|-86.6|N|es||Copán holds ancient Maya ruins|Bay Islands offer cheap reef diving
+Jamaica|18|-77|N|en|I|Birthplace of reggae and sprinter Usain Bolt|Blue Mountain coffee and jerk chicken
+Mexico|23|-102|N|es||Birthplace of tacos and Day of the Dead|The Chichén Itzá pyramid and mariachi
+Nicaragua|12.9|-85|N|es||Lake with freshwater sharks and twin volcanoes|Land of lakes and volcanoes
+Panama|8.5|-80|N|es||Home to a famous canal|The Bridge of the Americas spans its canal
+Saint Kitts and Nevis|17.3|-62.7|N|en|I|Smallest sovereign state in the Americas|Brimstone Hill Fortress overlooks the sea
+Saint Lucia|13.9|-61|N|en|I|The Pitons rise from the sea|The twin Pitons are a UNESCO site
+Saint Vincent and the Grenadines|13.2|-61.2|N|en|I|Filming location for Pirates of the Caribbean|La Soufrière volcano towers over the main island
+Trinidad and Tobago|10.5|-61.3|N|en|I|Birthplace of calypso and steelpan|Carnival and a lake of natural asphalt
+United States|39|-98|N|en||Home to Hollywood and the Statue of Liberty|The Grand Canyon and Mount Rushmore
+Argentina|-34|-64|S|es||Land of tango and Lionel Messi|Iguazú Falls and Patagonia glaciers
+Bolivia|-17|-65|S|es|L|Home to the world’s highest seat of government|Uyuni is the world’s largest salt flat
+Brazil|-10|-52|S|pt||Hosts Carnival and most of the Amazon|Christ the Redeemer overlooks Rio
+Chile|-33|-71|S|es||A very long, thin country along the Andes|Easter Island’s moai statues belong to it
+Colombia|4|-73|S|es||Famous for coffee and emeralds|Cartagena’s walled old city and cumbia music
+Ecuador|-1.5|-78|S|es||Named for the line that crosses it|Its Galápagos Islands inspired Darwin
+Guyana|5|-59|S|en||Kaieteur Falls is among the world’s mightiest single-drop falls|English is its only official language in South America
+Paraguay|-23|-58|S|es|L|Shares one of the world’s largest hydroelectric dams|Guaraní is spoken alongside Spanish
+Peru|-10|-76|S|es||Machu Picchu is its crown jewel|Nazca Lines are etched in the desert
+Suriname|4|-56|S|Dutch||Dutch-speaking nation on South America’s north coast|Its capital’s old wooden town is a UNESCO site
+Uruguay|-33|-56|S|es||Football’s first World Cup host|Gaucho beef culture and mate tea
+Venezuela|7|-66|S|es||Home to Angel Falls|Home to the Orinoco and tabletop mountains
+Australia|-25|134|O|en|I|Kangaroos and the Outback|Sydney Opera House and the Great Barrier Reef
+Fiji|-17.7|178|O|en|I|Archipelago famed for rugby sevens and bottled water|Kava ceremonies and over 300 islands
+Kiribati|1.9|-157|O|en|I|Among the first to see each new day, straddling the date line|Includes the huge Phoenix Islands protected area
+Marshall Islands|7|171|O|en|I|Site of Bikini Atoll nuclear tests|Atoll nation of lagoons and canoes
+Micronesia|6.9|158.2|O|en|I|Home to the mysterious stone ruins of Nan Madol|Its Yap island is famous for giant stone money
+Nauru|-0.5|166.9|O|en|I|Third-smallest country, once rich in phosphate|Tiny island with a phosphate-stripped interior
+New Zealand|-41|174|O|en|I|Kiwis and Middle-earth filming locations|Hobbiton and the Maori haka
+Palau|7.5|134.6|O|en|I|Jellyfish Lake lets visitors swim with harmless jellyfish|Rock Islands Southern Lagoon is a UNESCO site
+Papua New Guinea|-6|147|O|en||Over 800 languages are spoken here|Kokoda Track and birds of paradise
+Samoa|-13.8|-172|O|Samoan|I|Skipped a whole day by jumping the date line in 2011|Fale houses and fire knife dancing
+Solomon Islands|-9.6|160|O|en|I|WWII battle site of Guadalcanal|Marovo Lagoon is among the largest saltwater lagoons
+Tonga|-21|-175|O|Tongan|I|Only Pacific kingdom never colonized|Swim with humpback whales
+Tuvalu|-8.5|179|O|en|I|Threatened by rising seas, with the internet domain .tv|Nine small coral islands and few visitors
+Vanuatu|-16|167|O|Bislama|I|Birthplace of bungee jumping through land diving|Mount Yasur is an easily visited active volcano`;
+const EX=`Algiers|green white red|DZD|natural gas
+Luanda|red black yellow|AOA|crude oil
+Porto-Novo|green yellow red|XOF|cotton
+Gaborone|blue white black|BWP|diamonds
+Ouagadougou|red green yellow|XOF|gold
+Gitega|red green white|BIF|coffee
+Praia|blue white red yellow|CVE|fish
+Yaounde|green red yellow|XAF|crude oil
+Bangui|blue white green yellow red|XAF|diamonds
+N'Djamena|blue yellow red|XAF|crude oil
+Moroni|green white red yellow blue|KMF|vanilla
+Brazzaville|green yellow red|XAF|crude oil
+Kinshasa|blue yellow red|CDF|cobalt
+Yamoussoukro|orange white green|XOF|cocoa
+Djibouti|blue green white red|DJF|port services
+Cairo|red white black|EGP|cotton
+Malabo|green white red blue|XAF|crude oil
+Asmara|green red blue yellow|ERN|gold
+Mbabane|blue yellow red white black|SZL|sugar
+Addis Ababa|green yellow red blue|ETB|coffee
+Libreville|green yellow blue|XAF|crude oil
+Banjul|red blue green white|GMD|peanuts
+Accra|red yellow green black|GHS|gold
+Conakry|red yellow green|GNF|bauxite
+Bissau|red yellow green black|XOF|cashew nuts
+Nairobi|black red green white|KES|tea
+Maseru|blue white green black|LSL|diamonds
+Monrovia|red white blue|LRD|rubber
+Tripoli|red black green white|LYD|crude oil
+Antananarivo|white red green|MGA|vanilla
+Lilongwe|black red green|MWK|tobacco
+Bamako|green yellow red|XOF|gold
+Nouakchott|green yellow red|MRU|iron ore
+Port Louis|red blue yellow green|MUR|sugar
+Rabat|red green|MAD|phosphates
+Maputo|green black yellow white red|MZN|aluminium
+Windhoek|blue red white green|NAD|diamonds
+Niamey|orange white green|XOF|uranium
+Abuja|green white|NGN|crude oil
+Kigali|blue yellow green|RWF|coffee
+Sao Tome|green yellow red black|STN|cocoa
+Dakar|green yellow red|XOF|fish
+Victoria|blue yellow red white green|SCR|tuna
+Freetown|green white blue|SLE|diamonds
+Mogadishu|blue white|SOS|livestock
+Pretoria|red blue green yellow black white|ZAR|gold
+Juba|black red green white blue yellow|SSP|crude oil
+Khartoum|red white black green|SDG|gold
+Dodoma|green yellow black blue|TZS|gold
+Lome|green yellow red white|XOF|phosphates
+Tunis|red white|TND|olive oil
+Kampala|black yellow red white|UGX|coffee
+Lusaka|green red black orange|ZMW|copper
+Harare|green yellow red black white|ZWG|tobacco
+Kabul|black red green white|AFN|dried fruit
+Yerevan|red blue orange|AMD|brandy
+Baku|blue red green white|AZN|crude oil
+Manama|red white|BHD|oil
+Dhaka|green red|BDT|clothing
+Thimphu|yellow orange white|BTN|hydroelectric power
+Bandar Seri Begawan|yellow white black red|BND|oil and gas
+Phnom Penh|red blue white|KHR|garments
+Beijing|red yellow|CNY|electronics
+Nicosia|white orange green|EUR|halloumi
+Tbilisi|white red|GEL|wine
+New Delhi|saffron white green blue|INR|software services
+Jakarta|red white|IDR|palm oil
+Tehran|green white red|IRR|crude oil
+Baghdad|red white black green|IQD|crude oil
+Jerusalem|blue white|ILS|technology
+Tokyo|white red|JPY|cars
+Amman|black white green red|JOD|phosphates
+Astana|blue yellow|KZT|crude oil
+Kuwait City|green white red black|KWD|crude oil
+Bishkek|red yellow|KGS|gold
+Vientiane|red blue white|LAK|electricity
+Beirut|red white green|LBP|jewelry
+Kuala Lumpur|red white blue yellow|MYR|palm oil
+Male|red green white|MVR|tuna
+Ulaanbaatar|red blue yellow|MNT|coal
+Naypyidaw|yellow green red white|MMK|natural gas
+Kathmandu|crimson blue white|NPR|carpets
+Pyongyang|red white blue|KPW|minerals
+Muscat|red white green|OMR|crude oil
+Islamabad|green white|PKR|textiles
+Ramallah|black white green red|ILS|olive oil
+Manila|blue red white yellow|PHP|electronics
+Doha|maroon white|QAR|natural gas
+Moscow|white blue red|RUB|natural gas
+Riyadh|green white|SAR|crude oil
+Singapore|red white|SGD|electronics
+Seoul|white red blue black|KRW|semiconductors
+Colombo|yellow maroon orange green|LKR|tea
+Damascus|red white black green|SYP|olive oil
+Dushanbe|red white green yellow|TJS|aluminium
+Bangkok|red white blue|THB|rice
+Dili|red black yellow white|USD|coffee
+Ankara|red white|TRY|textiles
+Ashgabat|green red white|TMT|natural gas
+Abu Dhabi|red green white black|AED|crude oil
+Tashkent|blue white green red|UZS|cotton
+Hanoi|red yellow|VND|coffee
+Sanaa|red white black|YER|crude oil
+Tirana|red black|ALL|textiles
+Andorra la Vella|blue yellow red|EUR|tobacco
+Vienna|red white|EUR|machinery
+Minsk|red green white|BYN|potash
+Brussels|black yellow red|EUR|chocolate
+Sarajevo|blue yellow white|BAM|furniture
+Sofia|white green red|BGN|sunflower oil
+Zagreb|red white blue|EUR|ships
+Prague|white red blue|CZK|cars
+Copenhagen|red white|DKK|pork
+Tallinn|blue black white|EUR|electronics
+Helsinki|white blue|EUR|paper
+Paris|blue white red|EUR|wine
+Berlin|black red yellow|EUR|cars
+Athens|blue white|EUR|olive oil
+Budapest|red white green|HUF|cars
+Reykjavik|blue white red|ISK|fish
+Dublin|green white orange|EUR|pharmaceuticals
+Rome|green white red|EUR|pasta
+Riga|maroon white|EUR|timber
+Vaduz|blue red yellow|CHF|dental products
+Vilnius|yellow green red|EUR|furniture
+Luxembourg|red white blue|EUR|steel
+Valletta|white red|EUR|electronics
+Chisinau|blue yellow red|MDL|wine
+Monaco|red white|EUR|cosmetics
+Podgorica|red yellow|EUR|aluminium
+Amsterdam|red white blue|EUR|flowers
+Skopje|red yellow|MKD|clothing
+Oslo|red white blue|NOK|salmon
+Warsaw|white red|PLN|machinery
+Lisbon|green red yellow|EUR|cork
+Bucharest|blue yellow red|RON|cars
+San Marino|white blue|EUR|ceramics
+Belgrade|red blue white|RSD|raspberries
+Bratislava|white blue red|EUR|cars
+Ljubljana|white blue red|EUR|appliances
+Madrid|red yellow|EUR|olive oil
+Stockholm|blue yellow|SEK|timber
+Bern|red white|CHF|watches
+Kyiv|blue yellow|UAH|wheat
+London|red white blue|GBP|financial services
+Vatican City|yellow white|EUR|postage stamps
+Saint John's|red black blue white yellow|XCD|rum
+Nassau|blue yellow black|BSD|rum
+Bridgetown|blue yellow black|BBD|rum
+Belmopan|blue red white|BZD|bananas
+Ottawa|red white|CAD|crude oil
+San Jose|blue white red|CRC|bananas
+Havana|blue white red|CUP|cigars
+Roseau|green yellow black white red|XCD|bananas
+Santo Domingo|blue red white|DOP|sugar
+San Salvador|blue white|USD|coffee
+Saint George's|red yellow green|XCD|nutmeg
+Guatemala City|blue white|GTQ|coffee
+Port-au-Prince|blue red|HTG|clothing
+Tegucigalpa|blue white|HNL|coffee
+Kingston|green yellow black|JMD|bauxite
+Mexico City|green white red|MXN|cars
+Managua|blue white|NIO|coffee
+Panama City|red white blue|PAB|canal services
+Basseterre|green yellow black red white|XCD|sugar
+Castries|blue yellow black white|XCD|bananas
+Kingstown|blue yellow green|XCD|arrowroot
+Port of Spain|red white black|TTD|natural gas
+Washington|red white blue|USD|aircraft
+Buenos Aires|blue white yellow|ARS|soybeans
+Sucre|red yellow green|BOB|natural gas
+Brasilia|green yellow blue white|BRL|soybeans
+Santiago|blue white red|CLP|copper
+Bogota|yellow blue red|COP|coffee
+Quito|yellow blue red|USD|bananas
+Georgetown|green white yellow black red|GYD|gold
+Asuncion|red white blue|PYG|soybeans
+Lima|red white|PEN|copper
+Paramaribo|green white red yellow|SRD|gold
+Montevideo|white blue yellow|UYU|beef
+Caracas|yellow blue red|VES|crude oil
+Canberra|blue red white|AUD|iron ore
+Suva|blue red white|FJD|sugar
+Tarawa|red blue yellow white|AUD|coconut products
+Majuro|blue orange white|USD|fish
+Palikir|blue white|USD|fish
+Yaren|blue yellow white|AUD|phosphates
+Wellington|blue red white|NZD|dairy
+Ngerulmud|blue yellow|USD|fish
+Port Moresby|red black yellow white|PGK|gold
+Apia|red blue white|WST|coconut products
+Honiara|blue yellow green white|SBD|timber
+Nuku'alofa|red white|TOP|squash
+Funafuti|blue white yellow red|AUD|copra
+Port Vila|red green black yellow|VUV|copra`;const LF="Botswana|Eswatini|Kenya|Lesotho|Malawi|Mauritius|Mozambique|Namibia|South Africa|Tanzania|Uganda|Zambia|Zimbabwe|Seychelles|Bangladesh|Bhutan|Brunei|Cyprus|India|Indonesia|Japan|Malaysia|Maldives|Nepal|Pakistan|Singapore|Sri Lanka|Thailand|Timor-Leste|Ireland|Malta|United Kingdom|Antigua and Barbuda|Bahamas|Barbados|Dominica|Grenada|Jamaica|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Trinidad and Tobago|Guyana|Suriname|Australia|Fiji|Kiribati|Nauru|New Zealand|Papua New Guinea|Samoa|Solomon Islands|Tonga|Tuvalu";
+const EXR=EX.split("\n"),LEFT=new Set(LF.split("|"));
+const C=RAW.split("\n").map((r,i)=>{const a=r.split("|"),e=EXR[i].split("|");return{n:a[0],lat:+a[1],lon:+a[2],c:a[3],l:a[4],f:a[5]||"",k:(a[6]||"").trim(),k2:(a[7]||"").trim(),cap:e[0],fl:e[1].split(" "),cur:e[2],x:e[3],left:LEFT.has(a[0])}});
+const ISO="DZA AGO BEN BWA BFA BDI CPV CMR CAF TCD COM COG COD CIV DJI EGY GNQ ERI SWZ ETH GAB GMB GHA GIN GNB KEN LSO LBR LBY MDG MWI MLI MRT MUS MAR MOZ NAM NER NGA RWA STP SEN SYC SLE SOM ZAF SSD SDN TZA TGO TUN UGA ZMB ZWE AFG ARM AZE BHR BGD BTN BRN KHM CHN CYP GEO IND IDN IRN IRQ ISR JPN JOR KAZ KWT KGZ LAO LBN MYS MDV MNG MMR NPL PRK OMN PAK PSE PHL QAT RUS SAU SGP KOR LKA SYR TJK THA TLS TUR TKM ARE UZB VNM YEM ALB AND AUT BLR BEL BIH BGR HRV CZE DNK EST FIN FRA DEU GRC HUN ISL IRL ITA LVA LIE LTU LUX MLT MDA MCO MNE NLD MKD NOR POL PRT ROU SMR SRB SVK SVN ESP SWE CHE UKR GBR VAT ATG BHS BRB BLZ CAN CRI CUB DMA DOM SLV GRD GTM HTI HND JAM MEX NIC PAN KNA LCA VCT TTO USA ARG BOL BRA CHL COL ECU GUY PRY PER SUR URY VEN AUS FJI KIR MHL FSM NRU NZL PLW PNG WSM SLB TON TUV VUT";
+const CN={N:"North America",S:"South America",E:"Europe",F:"Africa",A:"Asia",O:"Oceania"},LG=c=>LN[c]||c;
+const HQ=[-77,38.9];
+// day + target
+const now=new Date(),day=Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())-Date.UTC(2026,10,3))/864e5)+1;
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const r0=rng(20260101),order=C.map((_,i)=>i).sort(()=>r0()-.5);
+const T=C[order[((day-1)%C.length+C.length)%C.length]];
+document.getElementById("cn").textContent=String(day).padStart(3,"0");
+// hints
+const R2D=180/Math.PI,rad=x=>x/R2D;
+function dist(a,b){const dl=rad(b.lat-a.lat),dn=rad(b.lon-a.lon),h=Math.sin(dl/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dn/2)**2;return 12742*Math.asin(Math.sqrt(h))}
+function dir(a,b){const y=Math.sin(rad(b.lon-a.lon))*Math.cos(rad(b.lat)),x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lon-a.lon));const d=(Math.atan2(y,x)*R2D+360)%360;return["north","northeast","east","southeast","south","southwest","west","northwest"][Math.round(d/45)%8]}
+const terr=f=>f=="L"?"landlocked":f=="I"?"an island nation":"coastal but not an island",vow=s=>(s.match(/[aeiou]/gi)||[]).length;
+const km=x=>Math.round(x).toLocaleString("en-US");
+// [tier, fn]: tier 0 = vague, 1 = medium, 2 = precise. Each guess draws random unused types from its tier.
+const HT=[
+[0,(G,T)=>G.c==T.c?`The suspect is on the same continent as ${G.n}.`:`The suspect is not on ${G.n}’s continent (${CN[G.c]}).`],
+[0,(G,T)=>`The suspect is farther ${T.lat>G.lat?"north":"south"} than ${G.n}.`],
+[0,(G,T)=>`The suspect is ${((T.lon-G.lon+540)%360)-180>0?"east":"west"} of ${G.n}.`],
+[0,(G,T)=>`The suspect’s country ${Math.abs(T.lat)<23.5?"is":"is not"} in the tropics (${G.n} ${Math.abs(G.lat)<23.5?"is":"is not"}).`],
+[0,(G,T)=>dist(G,T)<5000?`The suspect is within 5,000 km of ${G.n}.`:`The suspect is more than 5,000 km from ${G.n}.`],
+[0,(G,T)=>`The suspect’s country is ${terr(T.f)}.`],
+[1,(G,T)=>`Heading from ${G.n}: ${dir(G,T)}.`],
+[1,(G,T)=>`The suspect is roughly ${km(Math.max(500,Math.round(dist(G,T)/1000)*1000))} km from ${G.n}.`],
+[1,(G,T)=>{const h=Math.round((T.lon-G.lon)/15);return h?`Local clocks run about ${Math.abs(h)}h ${h>0?"ahead of":"behind"} ${G.n}.`:`Roughly the same time zone as ${G.n}.`}],
+[1,(G,T)=>G.l==T.l?`It shares a main language with ${G.n}.`:`Its main language is not ${LG(G.l)}.`],
+[1,(G,T)=>T.n<G.n?`Alphabetically, the suspect’s country comes before ${G.n}.`:`Alphabetically, the suspect’s country comes after ${G.n}.`],
+[1,(G,T)=>`Its name is ${T.n.length>G.n.length?"longer than":T.n.length<G.n.length?"shorter than":"the same length as"} ${G.n}.`],
+[2,(G,T)=>`About ${km(Math.round(dist(G,T)/100)*100)} km ${dir(G,T)} of ${G.n}.`],
+[2,(G,T)=>`Main language: ${LG(T.l)}${G.l==T.l?`, just like ${G.n}`:`, not ${LG(G.l)}`}.`],
+[2,(G,T)=>`Its name starts with “${T.n[0]}”; ${G.n} starts with “${G.n[0]}”.`],
+[2,(G,T)=>`Its name ends with “${T.n.slice(-1)}”; ${G.n} ends with “${G.n.slice(-1)}”.`],
+[2,(G,T)=>`Its name has ${T.n.length} letters (${G.n} has ${G.n.length}).`],
+[2,(G,T)=>`Its name has ${vow(T.n)} vowels (${G.n} has ${vow(G.n)}).`],
+[2,(G,T)=>{const L=[...T.n.toLowerCase()].filter(x=>/[a-z]/.test(x)),l=L[Math.floor(Math.random()*L.length)];return`Its name contains the letter “${l.toUpperCase()}”${G.n.toLowerCase().includes(l)?`, as does ${G.n}`:`, which ${G.n} lacks`}.`}],
+[0,(G,T)=>{const n=T.fl.filter(c=>G.fl.includes(c)).length;return`Its flag shares ${n} color${n==1?"":"s"} with ${G.n}’s flag.`}],
+[0,(G,T)=>`Drivers keep to the ${T.left?"left":"right"} side of the road (${G.n}: ${G.left?"left":"right"}).`],
+[1,(G,T)=>`Its flag has ${T.fl.length} colors; ${G.n}’s has ${G.fl.length}.`],
+[1,(G,T)=>G.cur==T.cur?`It uses the same currency as ${G.n}.`:`It does not use ${G.n}’s currency (${G.cur}).`],
+[1,(G,T)=>`Its capital’s name is ${T.cap.length>G.cap.length?"longer than":T.cap.length<G.cap.length?"shorter than":"the same length as"} ${G.cap}, the capital of ${G.n}.`],
+[2,(G,T)=>`Flag colors: ${T.fl.join(", ")}.`],
+[2,(G,T)=>`Its capital starts with “${T.cap[0]}”; ${G.n}’s capital, ${G.cap}, starts with “${G.cap[0]}”.`],
+[2,(G,T)=>`Currency code: ${T.cur} (${G.n}: ${G.cur}).`],
+[2,(G,T)=>`Famous export: ${T.x}; ${G.n}’s is ${G.x}.`]];
+const used=new Set();let tc=0;
+function pick(G,n){const tv=n>=2&&tc<2?[T.k2,T.k][tc]:"",tr=n<3?0:n<5?1:2,want=(n>=5?3:2)-(tv?1:0),sh=HT.map((_,i)=>i).sort(()=>Math.random()-.5),h=[],t=[];
+ const ord=[...sh.filter(i=>HT[i][0]==tr&&!used.has(i)),...sh.filter(i=>HT[i][0]<tr&&!used.has(i)),...sh.filter(i=>used.has(i))];
+ for(const i of ord){if(h.length>=want)break;const x=HT[i][1](G,T);if(x){h.push(x);t.push(i);used.add(i)}}
+ if(tv){h.push(`Intel: ${tv}.`);tc++}
+ return{h,t}}
+// globe
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d"),dpr=Math.min(devicePixelRatio||1,2);
+let W=560,H=420;
+function size(){W=Math.min(cv.parentElement.clientWidth||560,620);H=Math.round(W*.75);cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+const TWO=2*Math.PI,nrm=t=>t.toLowerCase().replace(/[^a-z]/g,""),idxISO=new Map(ISO.split(" ").map((c,i)=>[c,i])),idxName=new Map(C.map((c,i)=>[nrm(c.n),i]));
+const PL=new Path2D("M12 2c.8 0 1.5.9 1.5 2v5.5l8 4.5v2l-8-2v4.5l2 1.5V22l-3.5-1L8.5 22v-1.5l2-1.5V14.5l-8 2v-2l8-4.5V4c0-1.1.7-2 1.5-2z");
+const vis=new Map(),feats=[];
+// real country shapes (Natural Earth via Datamaps), decoded from TopoJSON
+if(window.WT){const t=WT.transform,ar=WT.arcs.map(a=>{let x=0,y=0;return a.map(p=>{if(!t)return p;x+=p[0];y+=p[1];return[x*t.scale[0]+t.translate[0],y*t.scale[1]+t.translate[1]]})});
+ const st=ids=>{const r=[];ids.forEach(i=>{const a=i<0?ar[~i].slice().reverse():ar[i];r.push(...(r.length?a.slice(1):a))});return r};
+ for(const g of Object.values(WT.objects)[0].geometries){if(!g.arcs)continue;const ps=(g.type=="Polygon"?[g.arcs]:g.arcs).map(p=>p.map(st)).map(p=>d3.geoArea({type:"Polygon",coordinates:p})>TWO?p.map(r=>r.slice().reverse()):p);
+  const nm=(g.properties||{}).name||"";feats.push({id:g.id,nm,geo:{type:"MultiPolygon",coordinates:ps},o:idxISO.has(g.id)?idxISO.get(g.id):idxName.has(nrm(nm))?idxName.get(nrm(nm)):-1})}}
+function inR(x,y,r){let c=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const[a,b]=r[i],[e,f]=r[j];if((b>y)!=(f>y)&&x<(e-a)*(y-b)/(f-b)+a)c=!c}return c}
+const inF=(f,x,y)=>f.geo.coordinates.some(p=>inR(x,y,p[0]));
+const has=new Set(feats.map(f=>f.o));
+C.forEach((c,i)=>{if(has.has(i))return;const f=feats.find(f=>f.o<0&&inF(f,c.lon,c.lat));if(f){f.o=i;has.add(i)}});
+// islands and tiny nations missing from the map get a small disc
+C.forEach((c,i)=>{if(has.has(i)||feats.some(f=>inF(f,c.lon,c.lat)))return;feats.push({o:i,geo:{type:"MultiPolygon",coordinates:[d3.geoCircle().center([c.lon,c.lat]).radius(1.7)().coordinates]}})});
+const proj=d3.geoOrthographic().clipAngle(90),path=d3.geoPath(proj,ctx),grat=d3.geoGraticule10();
+let zoom=1,center=[HQ[0],HQ[1]],pos=HQ,segs=[],part=null,plane=null,marks=[{n:"HQ",ll:HQ}],pulse=null;
+function draw(){
+ const R=Math.min(W,H)*.45*zoom;proj.rotate([-center[0],-center[1]]).scale(R).translate([W/2,H/2]);
+ ctx.clearRect(0,0,W,H);
+ const g=ctx.createRadialGradient(W/2-R*.3,H/2-R*.3,R*.1,W/2,H/2,R);g.addColorStop(0,"#16294a");g.addColorStop(1,"#0a1424");
+ ctx.beginPath();path({type:"Sphere"});ctx.fillStyle=g;ctx.fill();ctx.strokeStyle="#2c4468";ctx.lineWidth=1.5;ctx.stroke();
+ ctx.beginPath();path(grat);ctx.strokeStyle="rgba(120,160,210,.12)";ctx.lineWidth=.6;ctx.stroke();
+
+
+ const sh=["#27456f","#2e4f80","#223c62"];
+ for(const f of feats){ctx.beginPath();path(f.geo);ctx.fillStyle=f.o<0?"#1c2f4d":vis.get(f.o)||sh[f.o%3];ctx.fill()}
+ ctx.beginPath();for(const f of feats)path(f.geo);ctx.strokeStyle="rgba(205,225,250,.65)";ctx.lineWidth=.8;ctx.stroke();
+ ctx.lineWidth=1.8;ctx.strokeStyle="#f2b441";ctx.setLineDash([5,5]);
+ for(const s of segs){ctx.beginPath();path({type:"LineString",coordinates:s});ctx.stroke()}
+ if(part){ctx.beginPath();path({type:"LineString",coordinates:part});ctx.stroke()}
+ ctx.setLineDash([]);ctx.font="700 11px 'Courier Prime',monospace";
+ for(const m of marks){if(d3.geoDistance(m.ll,center)>1.5)continue;const q=proj(m.ll);
+  ctx.beginPath();ctx.arc(q[0],q[1],4,0,7);ctx.fillStyle=m.win?"#4cc38a":m.n=="HQ"?"#dfe7f2":"#f2b441";ctx.fill();
+  ctx.fillStyle="#dfe7f2";ctx.fillText(m.n,q[0]+7,q[1]+4)}
+ if(pulse){const q=proj(pulse.ll),r=pulse.t*34;ctx.beginPath();ctx.arc(q[0],q[1],r,0,7);ctx.strokeStyle=`rgba(242,180,65,${1-pulse.t})`;ctx.lineWidth=2;ctx.stroke()}
+ if(plane){ctx.save();ctx.translate(plane.x,plane.y);ctx.rotate(plane.a+Math.PI/2);ctx.scale(1.35,1.35);ctx.translate(-12,-12);ctx.shadowColor="#f2b441";ctx.shadowBlur=14;ctx.fillStyle="#fff";ctx.fill(PL);ctx.restore()}
+}
+function frames(ms,fn){return new Promise(res=>{const t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/ms);fn(k);draw();k<1?requestAnimationFrame(f):res()})(t0)})}
+async function fly(a,b){
+ const it=d3.geoInterpolate(a,b),ms=1100+d3.geoDistance(a,b)*1000,ease=d3.easeCubicInOut;
+ await frames(ms,k=>{const e=ease(k),p=it(e),q=it(Math.min(1,e+.01));
+  center=d3.geoInterpolate(center,p)(.14);
+  part=[a];for(let i=1;i<=24;i++)part.push(it(e*i/24));
+  const pp=proj(p),qq=proj(q);plane={x:pp[0],y:pp[1],a:Math.atan2(qq[1]-pp[1],qq[0]-pp[0])}});
+ plane=null;part=null;segs.push([a,b]);
+ await frames(500,k=>{center=d3.geoInterpolate(center,b)(.2);pulse={ll:b,t:k}});pulse=null;draw()}
+// game
+const $=id=>document.getElementById(id),log=$("log"),inp=$("in"),msg=$("msg");
+$("cl").innerHTML=C.map(c=>`<option value="${c.n}">`).join("");
+let guesses=[],over=false,busy=false;
+const key="coldtrail-"+day;
+function save(){try{localStorage.setItem(key,JSON.stringify(guesses))}catch(e){}}
+function card(G,n,win,h){
+ const el=document.createElement("div");el.className="card"+(win?" win":"");
+ if(win){el.innerHTML=`<h3>#${n} ${G.n}: SUSPECT APPREHENDED</h3><p>Case closed in ${n} flight${n>1?"s":""}.${T.k?" "+T.k+".":""}</p><p><button class="ghost" id="sh">Copy result</button></p>`}
+ else{el.innerHTML=`<h3>#${n} Landed in ${G.n}</h3>`+h.map(x=>`<p class="${x.startsWith("Intel")?"intel":""}">${x}</p>`).join("")}
+ log.prepend(el);
+ if(win)$("sh").onclick=()=>{const t=`🕵️ Cold Trail #${day}\nSolved in ${n} flight${n>1?"s":""}\n${"🛫".repeat(n-1)}🎯`;try{navigator.clipboard.writeText(t);$("sh").textContent="Copied!"}catch(e){$("sh").textContent="Copy failed"}}
+}
+async function add(G,anim,sv){
+ const n=guesses.length+1,ll=[G.lon,G.lat],win=G==T,hh=win?{h:[],t:[]}:sv||pick(G,n);if(sv&&sv.h.some(x=>x.startsWith("Intel")))tc++;guesses.push({g:G.n,h:hh.h,t:hh.t});hh.t.forEach(i=>used.add(i));save();
+ if(anim)await fly(pos,ll);else{segs.push([pos,ll]);center=ll}
+ pos=ll;marks.push({n:G.n,ll,win});vis.set(C.indexOf(G),win?"#4cc38a":"#b9822b");draw();
+ $("badge").textContent="FLIGHTS: "+n;card(G,n,win,hh.h);
+ if(win){over=true;inp.disabled=$("go").disabled=true;inp.placeholder="Case closed. Come back tomorrow."}}
+async function submit(){
+ if(over||busy)return;const G=C.find(c=>c.n.toLowerCase()==inp.value.trim().toLowerCase());
+ if(!G){msg.textContent="Unknown country. Pick one from the list.";return}
+ if(guesses.some(x=>x.g==G.n)){msg.textContent="You’ve already searched there.";return}
+ msg.textContent="";inp.value="";busy=true;$("go").disabled=true;await add(G,true);busy=false;if(!over)$("go").disabled=false}
+$("go").onclick=submit;inp.addEventListener("keydown",e=>{if(e.key=="Enter")submit()});
+let drag=null,vel=[0,0];cv.style.touchAction="none";cv.style.cursor="grab";
+const clampLat=v=>Math.max(-85,Math.min(85,v));
+cv.addEventListener("pointerdown",e=>{if(busy)return;drag={x:e.clientX,y:e.clientY};vel=[0,0];cv.setPointerCapture(e.pointerId);cv.style.cursor="grabbing"});
+cv.addEventListener("pointermove",e=>{if(!drag)return;const k=R2D/(Math.min(W,H)*.45*zoom),dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;vel=[-dx*k,dy*k];center=[center[0]+vel[0],clampLat(center[1]+vel[1])];draw()});
+const endDrag=()=>{if(!drag)return;drag=null;cv.style.cursor="grab";(function f(){if(drag||busy||Math.abs(vel[0])+Math.abs(vel[1])<.05)return;center=[center[0]+vel[0],clampLat(center[1]+vel[1])];vel=vel.map(v=>v*.94);draw();requestAnimationFrame(f)})()};
+cv.addEventListener("pointerup",endDrag);cv.addEventListener("pointercancel",endDrag);
+const pts=new Map(),zc=v=>Math.max(1,Math.min(8,v));let pd=0;
+cv.addEventListener("pointerdown",e=>{pts.set(e.pointerId,[e.clientX,e.clientY]);if(pts.size==2){drag=null;pd=0}});
+cv.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,[e.clientX,e.clientY]);if(pts.size==2){const[a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pd)zoom=zc(zoom*d/pd);pd=d;draw()}});
+const pUp=e=>{pts.delete(e.pointerId);pd=0};cv.addEventListener("pointerup",pUp);cv.addEventListener("pointercancel",pUp);
+cv.addEventListener("wheel",e=>{e.preventDefault();zoom=zc(zoom*Math.exp(-e.deltaY*.0015));draw()},{passive:false});
+$("zi").onclick=()=>{zoom=zc(zoom*1.4);draw()};$("zo").onclick=()=>{zoom=zc(zoom/1.4);draw()};
+size();addEventListener("resize",()=>{size();draw()});
+try{const s=JSON.parse(localStorage.getItem(key)||"[]");(async()=>{for(const x of s){const G=C.find(c=>c.n==x.g);if(G)await add(G,false,{h:x.h,t:x.t})}})()}catch(e){}
+draw();if(!window.WT)msg.textContent="Map data failed to load; try refreshing.";
+</script></body></html>
